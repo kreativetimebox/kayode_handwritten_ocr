@@ -1,0 +1,12 @@
+{
+  "tesseract_path": "C:\\Program Files\\Tesseract-OCR\\tesseract.exe",
+  "poppler_path": "C:\\poppler\\Library\\bin",
+  "models": {
+    "detection": "models/PP-OCRv5_server_det",
+    "recognition": "models/PP-OCRv5_server_rec"
+  },
+  "output": {
+    "default_excel_filename": "input_results2.xlsx",
+    "output_folder": "output"
+  }
+}

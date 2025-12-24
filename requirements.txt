@@ -1,0 +1,5 @@
+paddleocr[all]
+opencv-python
+pdf2image
+openpyxl
+pytesseract
