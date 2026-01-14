@@ -76,7 +76,7 @@ const ResultTable = ({ data, onClose }) => {
           const value = row[col] ?? ""; // handle null / undefined
           html += `
           <td style="padding:8px;">
-            ${value === null || value === undefined ? '&nbsp;' : String(value)}
+            ${value === null || value === undefined || value === "" ? 'N/A' : String(value)}
           </td>
         `;
         });
