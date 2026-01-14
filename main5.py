@@ -70,7 +70,7 @@ try:
         logger.warning(f"Config file not found: {config_path}, using defaults")
         config = {
             "tesseract_path": r"C:\Program Files\Tesseract-OCR\tesseract.exe",
-            "poppler_path": r"D:\Program Files\poppler-25.07.0\Library\bin",
+            "poppler_path": r"/usr/bin/",
             "models": {
                 "detection": "models/PP-OCRv5_server_det",
                 "recognition": "models/PP-OCRv5_server_rec"
@@ -2284,7 +2284,7 @@ Examples:
     parser.add_argument('-p', '--poppler', 
                         dest='poppler_path',
                         default=None,
-                        help=f'Path to Poppler bin directory (default from config: {config.get("poppler_path", "D:\\Program Files\\poppler-25.07.0\\Library\\bin")})')
+                        help=f'Path to Poppler bin directory (default from config: {config.get("poppler_path", "/usr/bin/")})')
     
     args = parser.parse_args()
     
@@ -2293,7 +2293,7 @@ Examples:
         globals()['POPLER_PATH'] = args.poppler_path
         logger.info(f"Poppler path overridden by command line: {args.poppler_path}")
     else:
-        globals()['POPLER_PATH'] = config.get('poppler_path', r'D:\Program Files\poppler-25.07.0\Library\bin')
+        globals()['POPLER_PATH'] = config.get('poppler_path', r'/usr/bin/')
         logger.info(f"Using Poppler path from config: {config.get('poppler_path')}")
     
     try:
