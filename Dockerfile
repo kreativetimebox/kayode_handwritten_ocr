@@ -8,6 +8,7 @@ RUN apt-get update && apt-get install -y \
     poppler-utils \
     libgl1 \
     libglib2.0-0 \
+    libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
 # 3. Set Working Directory
