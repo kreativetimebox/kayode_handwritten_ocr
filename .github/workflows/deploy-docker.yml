@@ -36,7 +36,9 @@ jobs:
           # We do NOT include models here because they are not in git
           # 1. Put --exclude BEFORE the path '.'
           # 2. Exclude the output filename itself to stop the "file changed" error
-          tar --exclude='.git' --exclude='project_code.tar.gz' -czf project_code.tar.gz .
+          # Write to /tmp/ to avoid modifying the current directory while reading it
+          tar --exclude='.git' -czf /tmp/project_code.tar.gz .
+          
 
       # --------------------------------------------------
       # 3. Setup SSH
@@ -67,7 +69,7 @@ jobs:
           
           # 2. Upload the tarball
           scp -i ~/.ssh/deploy_key -P $PORT \
-            project_code.tar.gz \
+            /tmp/project_code.tar.gz \
             root@$HOST:$DEPLOY_DIR/project_code.tar.gz
 
       # --------------------------------------------------
