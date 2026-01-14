@@ -34,7 +34,9 @@ jobs:
         run: |
           # Create a tarball of the current code, excluding .git
           # We do NOT include models here because they are not in git
-          tar -czf project_code.tar.gz . --exclude=.git
+          # 1. Put --exclude BEFORE the path '.'
+          # 2. Exclude the output filename itself to stop the "file changed" error
+          tar --exclude='.git' --exclude='project_code.tar.gz' -czf project_code.tar.gz .
 
       # --------------------------------------------------
       # 3. Setup SSH
