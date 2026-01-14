@@ -135,7 +135,7 @@ jobs:
             docker run -d \
               --name \$APP_NAME \
               --restart unless-stopped \
-              -p \$PORT:80 \
+              -p \$PORT:9000 \
               \$IMAGE_NAME:latest
 
             # --------------------------------------------------

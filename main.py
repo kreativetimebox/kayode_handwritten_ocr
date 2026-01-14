@@ -291,5 +291,5 @@ async def download_excel(data: List[OCRResult]):
 
 if __name__ == "__main__":
     print("Starting Web Server...")
-    print("Open http://localhost:8000 in your browser")
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    print("Open http://localhost:9000 in your browser")
+    uvicorn.run(app, host="0.0.0.0", port=9000)
