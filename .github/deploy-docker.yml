@@ -1,0 +1,146 @@
+name: Deploy Standalone App
+
+on:
+  push:
+    branches:
+      - master
+      - main
+  workflow_dispatch:
+
+env:
+  APP_NAME: ocr_app
+  IMAGE_NAME: ocr_app
+  # The directory on the server where the app lives
+  DEPLOY_DIR: /opt/ocr_app
+  # The port the app runs on
+  APP_PORT: 9000
+
+jobs:
+  deploy-direct:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      # --------------------------------------------------
+      # 1. Checkout Code
+      # --------------------------------------------------
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # --------------------------------------------------
+      # 2. Prepare Code for Transfer
+      # --------------------------------------------------
+      - name: Create project archive
+        run: |
+          # Create a tarball of the current code, excluding .git
+          # We do NOT include models here because they are not in git
+          tar -czf project_code.tar.gz . --exclude=.git
+
+      # --------------------------------------------------
+      # 3. Setup SSH
+      # --------------------------------------------------
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          cat > ~/.ssh/deploy_key << 'EOF'
+          ${{ secrets.SERVER_SSH_KEY }}
+          EOF
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts
+
+      # --------------------------------------------------
+      # 4. Upload Code to Server
+      # --------------------------------------------------
+      - name: Upload code to server
+        run: |
+          PORT=${{ secrets.SERVER_PORT }}
+          [ -z "$PORT" ] && PORT=22
+          HOST=$(echo "${{ secrets.SERVER_HOST }}" | tr -d '\n\r' | xargs)
+          
+          echo "Uploading code to $HOST:$DEPLOY_DIR ..."
+          
+          # 1. Ensure remote directory exists
+          ssh -i ~/.ssh/deploy_key -p $PORT root@$HOST "mkdir -p $DEPLOY_DIR"
+          
+          # 2. Upload the tarball
+          scp -i ~/.ssh/deploy_key -P $PORT \
+            project_code.tar.gz \
+            root@$HOST:$DEPLOY_DIR/project_code.tar.gz
+
+      # --------------------------------------------------
+      # 5. Remote Build and Deploy
+      # --------------------------------------------------
+      - name: Build and Deploy on Server
+        run: |
+          PORT=${{ secrets.SERVER_PORT }}
+          [ -z "$PORT" ] && PORT=22
+          HOST=$(echo "${{ secrets.SERVER_HOST }}" | tr -d '\n\r' | xargs)
+
+          ssh -i ~/.ssh/deploy_key -p $PORT "root@${HOST}" bash <<EOF
+            set -e
+
+            # Variables
+            APP_NAME="${APP_NAME}"
+            IMAGE_NAME="${IMAGE_NAME}"
+            DEPLOY_DIR="${DEPLOY_DIR}"
+            PORT="${APP_PORT}"
+
+            cd "\$DEPLOY_DIR"
+
+            # --------------------------------------------------
+            # A. Extract Code
+            # --------------------------------------------------
+            echo "Extracting new code..."
+            # We overwrite code files but PRESERVE the 'models' folder 
+            # that is already sitting in this directory
+            tar -xzf project_code.tar.gz
+            rm project_code.tar.gz
+
+            # --------------------------------------------------
+            # B. Check for Models (Safety Check)
+            # --------------------------------------------------
+            if [ ! -d "models" ]; then
+              echo "⚠️ WARNING: 'models' folder not found in \$DEPLOY_DIR!"
+              echo "Please manually upload your models folder to \$DEPLOY_DIR/models on the server."
+              # We don't exit here in case you handle models differently, 
+              # but usually, this is fatal if they are needed for build.
+            else
+              echo "✅ Found existing models folder. Including in build..."
+            fi
+
+            # --------------------------------------------------
+            # C. Build Docker Image (Locally on Server)
+            # --------------------------------------------------
+            echo "Building Docker image..."
+            # Since we are building HERE, the 'COPY .' in your Dockerfile 
+            # will pick up the 'models' folder residing in this directory.
+            docker build -t \$IMAGE_NAME:latest .
+
+            # --------------------------------------------------
+            # D. Stop Old Container
+            # --------------------------------------------------
+            echo "Stopping old container..."
+            docker stop \$APP_NAME 2>/dev/null || true
+            docker rm \$APP_NAME 2>/dev/null || true
+
+            # --------------------------------------------------
+            # E. Run New Container
+            # --------------------------------------------------
+            echo "Starting new container..."
+            docker run -d \
+              --name \$APP_NAME \
+              --restart unless-stopped \
+              -p \$PORT:80 \
+              \$IMAGE_NAME:latest
+
+            # --------------------------------------------------
+            # F. Clean Up (Requirement #1)
+            # --------------------------------------------------
+            echo "Cleaning up unused Docker images..."
+            # 'docker image prune -f' removes dangling images (previous versions)
+            # 'docker system prune -f' removes stopped containers and networks too
+            docker system prune -f
+
+            echo "✅ Deployment Complete!"
+          EOF

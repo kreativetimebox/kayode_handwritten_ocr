@@ -1,6 +1,6 @@
 {
-  "tesseract_path": "C:\\Program Files\\Tesseract-OCR\\tesseract.exe",
-  "poppler_path": "C:\\poppler\\Library\\bin",
+  "tesseract_path": "/usr/bin/tesseract",
+  "poppler_path": "/usr/bin/",
   "models": {
     "detection": "models/PP-OCRv5_server_det",
     "recognition": "models/PP-OCRv5_server_rec"

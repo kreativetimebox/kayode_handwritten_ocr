@@ -1,5 +1,11 @@
 paddleocr[all]
+paddlepaddle==3.2.0
 opencv-python
 pdf2image
 openpyxl
 pytesseract
+fastapi 
+uvicorn 
+python-multipart 
+aiofiles
+requests

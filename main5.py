@@ -2199,6 +2199,68 @@ def run_ocr(input_path, output_excel_path=None):
     logger.info("OCR PROCESSING COMPLETED")
     logger.info("="*80)
 
+def process_single_pdf_for_api(file_path_str):
+    """
+    Wrapper for API: Processes a single file and returns a JSON-friendly dict.
+    """
+    file_path = Path(file_path_str)
+    
+    # 1. Setup minimal environment like run_ocr does
+    # We create a temporary output folder for any debug images run_ocr_on_file might generate
+    output_base = file_path.parent / "temp_output"
+    output_base.mkdir(exist_ok=True)
+
+    # 2. Initialize the data row structure (Exact copy from run_ocr)
+    data_row = {
+        'file_name': file_path.name,
+        'invoice': None,
+        'visit': None,
+        'transit_number': None,
+        'account_number': None,
+        'prefix': None,
+        'intrlab_cash_log_date': None,
+        'amount': None,
+        'other_amount': None,
+        'amount_candidates': []
+    }
+
+    # 3. Run the Core Logic (Reusing your existing function)
+    try:
+        # logger.info(f"API Processing: {file_path.name}")
+        run_ocr_on_file(file_path, output_base, data_row)
+    except Exception as e:
+        logger.error(f"API Error processing {file_path.name}: {e}")
+        # We continue so we can return the default "N/A" values instead of crashing
+
+    # 4. Apply Defaults (Exact copy from run_ocr)
+    if data_row['invoice'] is None:
+        data_row['invoice'] = 'N'
+    if data_row.get('visit') is None:
+        data_row['visit'] = 'N'
+
+    for k in ['transit_number', 'account_number', 'prefix', 'intrlab_cash_log_date']:
+        if data_row[k] is None:
+            data_row[k] = 'N/A'
+            
+    # Handle numeric defaults safely for API
+    if data_row['amount'] is None:
+        data_row['amount'] = 0.0
+    if data_row['other_amount'] is None:
+        data_row['other_amount'] = 0.0
+
+    # 5. Return Dictionary with keys matching the API Model
+    return {
+        "file_name": data_row['file_name'],
+        "invoice(Y/N)": data_row['invoice'],
+        "Visit(Y/N)": data_row['visit'],
+        "Transit_No": str(data_row['transit_number']),
+        "Account_No": str(data_row['account_number']),
+        "prefix": str(data_row['prefix']),
+        "ILR_date": str(data_row['intrlab_cash_log_date']),
+        "amount": float(data_row['amount']),       # Ensure it's a number
+        "other_amount": float(data_row['other_amount']) # Ensure it's a number
+    }
+
 if __name__ == "__main__":
     # Parse command line arguments
     parser = argparse.ArgumentParser(
