@@ -10,7 +10,7 @@ on:
 env:
   APP_NAME: ocr_app
   IMAGE_NAME: ocr_app
-  DEPLOY_DIR: /home/balabantaray-user/ocr_app   # ✅ FIXED
+  DEPLOY_DIR: /home/balabantaray-user/ocr_app
   APP_PORT: 9000
 
 jobs:
@@ -30,7 +30,6 @@ jobs:
       # --------------------------------------------------
       - name: Create project archive
         run: |
-          # ✅ Use current dir instead of /opt
           tar --exclude='.git' -czf project_code.tar.gz .
 
       # --------------------------------------------------
@@ -59,11 +58,9 @@ jobs:
 
           echo "Uploading code to $HOST:$DEPLOY_DIR ..."
 
-          # Create directory in HOME (no sudo needed)
           ssh -i ~/.ssh/deploy_key -p $PORT \
             balabantaray-user@$HOST "mkdir -p $DEPLOY_DIR"
 
-          # Upload tar
           scp -i ~/.ssh/deploy_key -P $PORT \
             project_code.tar.gz \
             balabantaray-user@$HOST:$DEPLOY_DIR/project_code.tar.gz
@@ -79,7 +76,7 @@ jobs:
           HOST=$(echo "${{ secrets.SERVER_HOST }}" | tr -d '\n\r' | xargs)
 
           ssh -i ~/.ssh/deploy_key -p $PORT "balabantaray-user@${HOST}" << 'EOF'
-            set -e
+            set -euo pipefail
 
             APP_NAME="ocr_app"
             IMAGE_NAME="ocr_app"
@@ -102,33 +99,61 @@ jobs:
               echo "⚠️ WARNING: models folder missing"
             else
               echo "✅ Models folder found"
+              du -sh models || true
             fi
 
             # --------------------------------------------------
-            # C. Build Docker Image
+            # C. Check GPU (IMPORTANT DEBUG)
+            # --------------------------------------------------
+            echo "Checking GPU availability..."
+            nvidia-smi || echo "⚠️ GPU not detected!"
+
+            # --------------------------------------------------
+            # D. Build Docker Image
             # --------------------------------------------------
             echo "Building Docker image..."
             docker build -t $IMAGE_NAME:latest .
 
             # --------------------------------------------------
-            # D. Stop Old Container
+            # E. Stop Old Container
             # --------------------------------------------------
             echo "Stopping old container..."
             docker rm -f $APP_NAME 2>/dev/null || true
 
             # --------------------------------------------------
-            # E. Run New Container
+            # F. Run New Container (GPU ENABLED)
             # --------------------------------------------------
-            echo "Starting new container..."
+            echo "Starting new container with GPU..."
             docker run -d \
               --gpus all \
               --name $APP_NAME \
               --restart unless-stopped \
               -p $PORT:9000 \
+              -e NVIDIA_VISIBLE_DEVICES=all \
+              -e NVIDIA_DRIVER_CAPABILITIES=compute,utility \
               $IMAGE_NAME:latest
 
             # --------------------------------------------------
-            # F. Cleanup
+            # G. Health Check
+            # --------------------------------------------------
+            echo "Running health check..."
+            for i in {1..15}; do
+              if curl -fs http://localhost:$PORT/ >/dev/null 2>&1; then
+                echo "✅ App is live"
+                break
+              fi
+              echo "Waiting... ($i)"
+              sleep 2
+            done
+
+            # --------------------------------------------------
+            # H. Logs (debug if needed)
+            # --------------------------------------------------
+            echo "Last logs:"
+            docker logs $APP_NAME --tail 50 || true
+
+            # --------------------------------------------------
+            # I. Cleanup
             # --------------------------------------------------
             echo "Cleaning unused Docker data..."
             docker system prune -f
