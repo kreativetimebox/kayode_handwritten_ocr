@@ -10,9 +10,7 @@ on:
 env:
   APP_NAME: ocr_app
   IMAGE_NAME: ocr_app
-  # The directory on the server where the app lives
-  DEPLOY_DIR: /opt/ocr_app
-  # The port the app runs on
+  DEPLOY_DIR: /home/balabantaray-user/ocr_app   # ✅ FIXED
   APP_PORT: 9000
 
 jobs:
@@ -32,13 +30,8 @@ jobs:
       # --------------------------------------------------
       - name: Create project archive
         run: |
-          # Create a tarball of the current code, excluding .git
-          # We do NOT include models here because they are not in git
-          # 1. Put --exclude BEFORE the path '.'
-          # 2. Exclude the output filename itself to stop the "file changed" error
-          # Write to /opt/ to avoid modifying the current directory while reading it
-          tar --exclude='.git' -czf /opt/project_code.tar.gz .
-          
+          # ✅ Use current dir instead of /opt
+          tar --exclude='.git' -czf project_code.tar.gz .
 
       # --------------------------------------------------
       # 3. Setup SSH
@@ -47,11 +40,12 @@ jobs:
         run: |
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
-          cat > ~/.ssh/deploy_key << 'EOF'
-          ${{ secrets.SERVER_SSH_KEY }}
-          EOF
+
+          echo "${{ secrets.SERVER_SSH_KEY }}" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts
+
+          HOST=$(echo "${{ secrets.SERVER_HOST }}" | tr -d '\n\r' | xargs)
+          ssh-keyscan -H "$HOST" >> ~/.ssh/known_hosts
 
       # --------------------------------------------------
       # 4. Upload Code to Server
@@ -60,16 +54,18 @@ jobs:
         run: |
           PORT=${{ secrets.SERVER_PORT }}
           [ -z "$PORT" ] && PORT=22
+
           HOST=$(echo "${{ secrets.SERVER_HOST }}" | tr -d '\n\r' | xargs)
-          
+
           echo "Uploading code to $HOST:$DEPLOY_DIR ..."
-          
-          # 1. Ensure remote directory exists
-          ssh -i ~/.ssh/deploy_key -p $PORT balabantaray-user@$HOST "mkdir -p $DEPLOY_DIR"
-          
-          # 2. Upload the tarball
+
+          # Create directory in HOME (no sudo needed)
+          ssh -i ~/.ssh/deploy_key -p $PORT \
+            balabantaray-user@$HOST "mkdir -p $DEPLOY_DIR"
+
+          # Upload tar
           scp -i ~/.ssh/deploy_key -P $PORT \
-            /opt/project_code.tar.gz \
+            project_code.tar.gz \
             balabantaray-user@$HOST:$DEPLOY_DIR/project_code.tar.gz
 
       # --------------------------------------------------
@@ -79,54 +75,46 @@ jobs:
         run: |
           PORT=${{ secrets.SERVER_PORT }}
           [ -z "$PORT" ] && PORT=22
+
           HOST=$(echo "${{ secrets.SERVER_HOST }}" | tr -d '\n\r' | xargs)
 
-          ssh -i ~/.ssh/deploy_key -p $PORT "balabantaray-user@${HOST}" bash <<EOF
+          ssh -i ~/.ssh/deploy_key -p $PORT "balabantaray-user@${HOST}" << 'EOF'
             set -e
 
-            # Variables
-            APP_NAME="${APP_NAME}"
-            IMAGE_NAME="${IMAGE_NAME}"
-            DEPLOY_DIR="${DEPLOY_DIR}"
-            PORT="${APP_PORT}"
+            APP_NAME="ocr_app"
+            IMAGE_NAME="ocr_app"
+            DEPLOY_DIR="/home/balabantaray-user/ocr_app"
+            PORT="9000"
 
-            cd "\$DEPLOY_DIR"
+            cd "$DEPLOY_DIR"
 
             # --------------------------------------------------
             # A. Extract Code
             # --------------------------------------------------
             echo "Extracting new code..."
-            # We overwrite code files but PRESERVE the 'models' folder 
-            # that is already sitting in this directory
             tar -xzf project_code.tar.gz
             rm project_code.tar.gz
 
             # --------------------------------------------------
-            # B. Check for Models (Safety Check)
+            # B. Check for Models
             # --------------------------------------------------
             if [ ! -d "models" ]; then
-              echo "⚠️ WARNING: 'models' folder not found in \$DEPLOY_DIR!"
-              echo "Please manually upload your models folder to \$DEPLOY_DIR/models on the server."
-              # We don't exit here in case you handle models differently, 
-              # but usually, this is fatal if they are needed for build.
+              echo "⚠️ WARNING: models folder missing"
             else
-              echo "✅ Found existing models folder. Including in build..."
+              echo "✅ Models folder found"
             fi
 
             # --------------------------------------------------
-            # C. Build Docker Image (Locally on Server)
+            # C. Build Docker Image
             # --------------------------------------------------
             echo "Building Docker image..."
-            # Since we are building HERE, the 'COPY .' in your Dockerfile 
-            # will pick up the 'models' folder residing in this directory.
-            docker build -t \$IMAGE_NAME:latest .
+            docker build -t $IMAGE_NAME:latest .
 
             # --------------------------------------------------
             # D. Stop Old Container
             # --------------------------------------------------
             echo "Stopping old container..."
-            docker stop \$APP_NAME 2>/dev/null || true
-            docker rm \$APP_NAME 2>/dev/null || true
+            docker rm -f $APP_NAME 2>/dev/null || true
 
             # --------------------------------------------------
             # E. Run New Container
@@ -134,17 +122,15 @@ jobs:
             echo "Starting new container..."
             docker run -d \
               --gpus all \
-              --name \$APP_NAME \
+              --name $APP_NAME \
               --restart unless-stopped \
-              -p \$PORT:9000 \
-              \$IMAGE_NAME:latest
+              -p $PORT:9000 \
+              $IMAGE_NAME:latest
 
             # --------------------------------------------------
-            # F. Clean Up (Requirement #1)
+            # F. Cleanup
             # --------------------------------------------------
-            echo "Cleaning up unused Docker images..."
-            # 'docker image prune -f' removes dangling images (previous versions)
-            # 'docker system prune -f' removes stopped containers and networks too
+            echo "Cleaning unused Docker data..."
             docker system prune -f
 
             echo "✅ Deployment Complete!"
