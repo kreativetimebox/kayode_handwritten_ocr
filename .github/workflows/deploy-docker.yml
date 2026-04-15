@@ -26,11 +26,24 @@ jobs:
         uses: actions/checkout@v4
 
       # --------------------------------------------------
-      # 2. Prepare Code for Transfer
+      # 2. Prepare Code for Transfer (FIXED TAR ISSUE)
       # --------------------------------------------------
       - name: Create project archive
         run: |
-          tar --exclude='.git' -czf project_code.tar.gz .
+          echo "Creating stable archive..."
+
+          rsync -a --delete \
+            --exclude='.git' \
+            --exclude='node_modules' \
+            --exclude='.next' \
+            --exclude='*.log' \
+            --exclude='.cache' \
+            ./ temp_build/
+
+          tar -czf project_code.tar.gz -C temp_build .
+          rm -rf temp_build
+
+          ls -lh project_code.tar.gz
 
       # --------------------------------------------------
       # 3. Setup SSH
@@ -103,7 +116,7 @@ jobs:
             fi
 
             # --------------------------------------------------
-            # C. Check GPU (IMPORTANT DEBUG)
+            # C. Check GPU
             # --------------------------------------------------
             echo "Checking GPU availability..."
             nvidia-smi || echo "⚠️ GPU not detected!"
@@ -147,7 +160,7 @@ jobs:
             done
 
             # --------------------------------------------------
-            # H. Logs (debug if needed)
+            # H. Logs (debug)
             # --------------------------------------------------
             echo "Last logs:"
             docker logs $APP_NAME --tail 50 || true
