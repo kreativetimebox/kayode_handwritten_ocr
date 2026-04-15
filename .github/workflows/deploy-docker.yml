@@ -36,8 +36,8 @@ jobs:
           # We do NOT include models here because they are not in git
           # 1. Put --exclude BEFORE the path '.'
           # 2. Exclude the output filename itself to stop the "file changed" error
-          # Write to /tmp/ to avoid modifying the current directory while reading it
-          tar --exclude='.git' -czf /tmp/project_code.tar.gz .
+          # Write to /opt/ to avoid modifying the current directory while reading it
+          tar --exclude='.git' -czf /opt/project_code.tar.gz .
           
 
       # --------------------------------------------------
@@ -65,12 +65,12 @@ jobs:
           echo "Uploading code to $HOST:$DEPLOY_DIR ..."
           
           # 1. Ensure remote directory exists
-          ssh -i ~/.ssh/deploy_key -p $PORT root@$HOST "mkdir -p $DEPLOY_DIR"
+          ssh -i ~/.ssh/deploy_key -p $PORT balabantaray-user@$HOST "mkdir -p $DEPLOY_DIR"
           
           # 2. Upload the tarball
           scp -i ~/.ssh/deploy_key -P $PORT \
-            /tmp/project_code.tar.gz \
-            root@$HOST:$DEPLOY_DIR/project_code.tar.gz
+            /opt/project_code.tar.gz \
+            balabantaray-user@$HOST:$DEPLOY_DIR/project_code.tar.gz
 
       # --------------------------------------------------
       # 5. Remote Build and Deploy
@@ -81,7 +81,7 @@ jobs:
           [ -z "$PORT" ] && PORT=22
           HOST=$(echo "${{ secrets.SERVER_HOST }}" | tr -d '\n\r' | xargs)
 
-          ssh -i ~/.ssh/deploy_key -p $PORT "root@${HOST}" bash <<EOF
+          ssh -i ~/.ssh/deploy_key -p $PORT "balabantaray-user@${HOST}" bash <<EOF
             set -e
 
             # Variables
@@ -133,6 +133,7 @@ jobs:
             # --------------------------------------------------
             echo "Starting new container..."
             docker run -d \
+              --gpus all \
               --name \$APP_NAME \
               --restart unless-stopped \
               -p \$PORT:9000 \
